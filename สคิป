@@ -1,0 +1,1068 @@
+#! / bin / ทุบตี
+# สคริปต์โดย athena
+# ไลน์: athena
+# ขอขอบคุณทีมงานที่ขยันซ้อมและให้กำลังใจ
+
+#############################
+#############################
+# ตัวแปร (สามารถเปลี่ยนแปลงได้ขึ้นอยู่กับค่าที่คุณต้องการ)
+# ชื่อสคริปต์
+MyScriptName = 'athena'
+
+# พอร์ต OpenSSH
+SSH_Port1 = '22 '
+SSH_Port2 = '226'
+
+# แบนเนอร์ SSH ของคุณ
+SSH_Banner = 'https: //github.com/javakeisha/debian9sc/raw/main/files/plugins/issue.net'
+
+# พอร์ต Dropbear
+Dropbear_Port1 = '143'
+Dropbear_Port2 = '110'
+
+# พอร์ต Stunnel
+Stunnel_Port1 = '555' # ผ่าน Dropbear
+Stunnel_Port2 = '444' # ผ่าน OpenSSH
+
+# พอร์ต OpenVPN
+OpenVPN_TCP_Port = '443'
+OpenVPN_UDP_Port = '445'
+
+# พอร์ตปลาหมึก
+Squid_Port1 = '3128'
+Squid_Port2 = '8080'
+Squid_Port3 = '8000'
+
+# พอร์ตดาวน์โหลดการกำหนดค่า OpenVPN
+OvpnDownload_Port = '85 '# ก่อนเปลี่ยนค่านี้โปรดอ่านเอกสารนี้ มีพอร์ตที่ไม่ปลอดภัยทั้งหมดสำหรับเบราว์เซอร์ Google Chrome โปรดอ่านตั้งแต่บรรทัด # 23 ถึงบรรทัด # 89: https://chromium.googlesource.com/chromium/src.git/+/refs/heads/master/net/base/port_util .cc
+
+# เวลาท้องถิ่นของเซิร์ฟเวอร์
+MyVPS_Time = 'เอเชีย / กรุงเทพฯ'
+#############################
+
+
+#############################
+#############################
+## ฟังก์ชันทั้งหมดที่ใช้สำหรับสคริปต์นี้
+#############################
+## คำเตือน: ห้ามแก้ไขหรือแก้ไขสิ่งใด ๆ
+## หากคุณไม่รู้ว่าจะทำอย่างไร
+## ส่วนนี้ไวเกินไป
+#############################
+#############################
+
+ฟังก์ชัน InstUpdates () {
+ ส่งออก DEBIAN_FRONTEND = ไม่โต้ตอบ
+ อัปเดต apt-get
+ apt-get อัพเกรด -y
+ 
+ # การลบเครื่องมือไฟร์วอลล์บางอย่างที่อาจส่งผลกระทบต่อบริการอื่น ๆ
+ apt-get remove --purge ufw firewalld -y
+
+ # ติดตั้ง Speedtest
+ apt ติดตั้ง python-pip
+ apt ติดตั้ง ptyhon3-pip
+ pip ติดตั้ง speedtest-cli
+ 
+ # การติดตั้งอุปกรณ์ที่สำคัญบางอย่างที่จำเป็น
+ apt-get ติดตั้ง nano wget curl zip unzip tar gzip p7zip-full bc rc openssl cron net-tools dnsutils dos2unix screen bzip2 ccrypt -y
+ 
+ # ตอนนี้กำลังติดตั้งบริการที่เราต้องการทั้งหมด
+ apt-get install dropbear stunnel4 privoxy ca-certificate nginx ruby ​​apt-transport-https lsb-release squid -y
+
+ # การติดตั้งแพ็คเกจที่จำเป็นทั้งหมดเพื่อติดตั้ง Webmin
+ apt-get install perl libnet-ssleay-perl openssl libauthen-pam-perl libpam-runtime libio-pty-perl apt-show-versions python dbus libxml-parser-perl -y
+ apt-get install shared-mime-info jq fail2ban -y
+
+ 
+ # การติดตั้ง colorizer ข้อความ
+ ติดตั้งอัญมณี lolcat
+
+ # พยายามลบแพ็คเกจล้าสมัยหลังการติดตั้ง
+ apt-get autoremove -y
+ 
+ # การติดตั้ง OpenVPN โดยดึงที่เก็บภายในไฟล์ source.list 
+ rm -rf /etc/apt/sources.list.d/openvpn*
+ echo "deb http://build.openvpn.net/debian/openvpn/stable $ (lsb_release -sc) main"> /etc/apt/sources.list.d/openvpn.list
+ wget -qO - http://build.openvpn.net/debian/openvpn/stable/pubkey.gpg|apt- คีย์เพิ่ม -
+ อัปเดต apt-get
+ apt-get ติดตั้ง openvpn -y
+}
+
+ฟังก์ชัน InstWebmin () {
+ # ดาวน์โหลดแพ็คเกจ webmin .deb
+ # คุณสามารถเปลี่ยนเวอร์ชัน webmin ได้ขึ้นอยู่กับลิงก์ที่คุณโหลดในตัวแปรนี้ (ไฟล์. deb เท่านั้นห้ามโหลดไฟล์. zip หรือ. tar.gz):
+ WebminFile = 'https: //github.com/javakeisha/debian9sc/raw/main/files/plugins/webmin_1.920_all.deb'
+ wget -qO webmin.deb "$ WebminFile"
+ 
+ # การติดตั้งแพ็คเกจ. deb สำหรับ webmin
+ dpkg - ติดตั้ง webmin.deb
+ 
+ rm -rf webmin.deb
+ 
+ # การกำหนดค่าการกำหนดค่าเซิร์ฟเวอร์ webmin เพื่อใช้เฉพาะ http แทน https
+ sed -i 's | ssl = 1 | ssl = 0 | g' /etc/webmin/miniserv.conf
+ 
+ # จากนั้นรีสตาร์ทเพื่อให้มีผล
+ systemctl รีสตาร์ท webmin
+}
+
+ฟังก์ชัน InstSSH () {
+ # การลบการกำหนดค่าเซิร์ฟเวอร์ sshd ที่ซ้ำกันบางส่วน
+ rm -f / etc / ssh / sshd_config *
+ 
+ # การสร้างการกำหนดค่าเซิร์ฟเวอร์ SSH โดยใช้เทคนิค cat eof
+ cat << 'MySSHConfig'> / etc / ssh / sshd_config
+# การกำหนดค่าเซิร์ฟเวอร์ OpenSSH ของฉัน
+พอร์ต myPORT1
+พอร์ต myPORT2
+ที่อยู่ครอบครัว inet
+ListenAddress 0.0.0.0
+HostKey / etc / ssh / ssh_host_rsa_key
+HostKey / etc / ssh / ssh_host_ecdsa_key
+HostKey / etc / ssh / ssh_host_ed25519_key
+PermitRootLogin ใช่
+MaxSessions 1024
+PubkeyAuthentication ใช่
+PasswordAuthentication ใช่
+PermitEmptyPasswords no
+ChallengeResponseAuthentication no
+UsePAM ใช่
+X11 Forwarding ใช่
+PrintMotd เลขที่
+ClientAliveInterval 240
+ClientAliveCountMax 2
+ใช้หมายเลข DNS
+แบนเนอร์ / etc / banner
+AcceptEnv LANG LC_ *
+ระบบย่อย sftp / usr / lib / openssh / sftp-server
+MySSHConfig
+
+ # ตอนนี้เราจะใส่พอร์ต ssh ของเราไว้ใน sshd_config
+ sed -i "s | myPORT1 | $ SSH_Port1 | g" / etc / ssh / sshd_config
+ sed -i "s | myPORT2 | $ SSH_Port2 | g" / etc / ssh / sshd_config
+
+ # ดาวน์โหลดแบนเนอร์ SSH ของเรา
+ rm -f / etc / แบนเนอร์
+ wget -qO / etc / banner "$ SSH_Banner"
+ dos2unix -q / etc / banner
+
+ # รหัสวิธีแก้ปัญหาของฉันในการลบ "ข้อผิดพลาดรหัสผ่าน BAD" ออกจากคำสั่ง passwd มันจะแก้ไขข้อผิดพลาดเกี่ยวกับรหัสผ่านในบัญชี ssh ของพวกเขา
+ sed -i '/password\s*requisite\s*pam_cracklib.s.*/d' /etc/pam.d/common-password
+ sed -i 's / use_authtok // g' /etc/pam.d/common-password
+
+ # คำสั่งบางอย่างเพื่อระบุ null เชลล์เมื่อคุณขุดอุโมงค์ผ่าน SSH หรือใช้ Stunnel มันจะแก้ไขข้อผิดพลาดการตรวจสอบผู้ใช้ / ผ่านบน HTTP Injector, KPN Tunnel, eProxy, SVI, HTTP Proxy Injector และแอปอุโมงค์ ssh / ssl
+ sed -i '/ \ / bin \ / false / d' / etc / เชลล์
+ sed -i '/ \ / usr \ / sbin \ / nologin / d' / etc / เปลือก
+ echo '/ bin / false' >> / etc / เชลล์
+ echo '/ usr / sbin / nologin' >> / etc / เชลล์
+ 
+ # การเริ่มบริการ openssh ใหม่
+ systemctl รีสตาร์ท ssh
+ 
+ # การลบไฟล์กำหนดค่าที่ซ้ำกันบางไฟล์
+ rm -rf / etc / default / dropbear *
+ 
+ # การสร้างการกำหนดค่า dropbear โดยใช้เทคนิค cat eof
+ cat << 'MyDropbear'> / etc / default / dropbear
+# การกำหนดค่า Dropbear ของฉัน
+NO_START = 0
+DROPBEAR_PORT = PORT01
+DROPBEAR_EXTRA_ARGS = "- หน้า PORT02"
+DROPBEAR_BANNER = "/ etc / banner"
+DROPBEAR_RSAKEY = "/ etc / dropbear / dropbear_rsa_host_key"
+DROPBEAR_DSSKEY = "/ etc / dropbear / dropbear_dss_host_key"
+DROPBEAR_ECDSAKEY = "/ etc / dropbear / dropbear_ecdsa_host_key"
+DROPBEAR_RECEIVE_WINDOW = 65536
+MyDropbear
+
+ # ตอนนี้เปลี่ยนพอร์ตดรอปแบร์ที่ต้องการ
+ sed -i "s | PORT01 | $ Dropbear_Port1 | g" / etc / default / dropbear
+ sed -i "s | PORT02 | $ Dropbear_Port2 | g" / etc / default / dropbear
+ 
+ # กำลังเริ่มบริการ dropbear ใหม่
+ systemctl รีสตาร์ท dropbear
+}
+
+function InsStunnel () {
+ StunnelDir = $ (ls / etc / default | grep stunnel | head -n1)
+
+ # การสร้างการกำหนดค่าเริ่มต้น Stunnel โดยใช้เทคนิค cat eof
+cat << 'MyStunnelD'> / etc / default / $ StunnelDir
+# การกำหนดค่า Stunnel ของฉัน
+เปิดใช้งาน = 1
+FILES = "/ etc / stunnel / *. conf"
+OPTIONS = ""
+แบนเนอร์ = "/ etc / banner"
+PPP_RESTART = 0
+# RLIMITS = "- n 4096 -d ไม่ จำกัด "
+RLIMITS = ""
+MyStunnelD
+
+ # การลบเนื้อหาโฟลเดอร์ Stunnel ทั้งหมด
+ rm -rf / etc / งัน / *
+ 
+ # การสร้างใบรับรอง Stunnel โดยใช้ openssl
+ openssl req -new -x509 -days 9999 -nodes -subj "/ C = PH / ST = NCR / L = Kuala_Lumpur / O = $ MyScriptName / OU = $ MyScriptName / CN = $ MyScriptName" -out / etc / stunnel / stunnel .pem -keyout /etc/stunnel/stunnel.pem &> / dev / null
+##> / dev / null 2> & 1
+
+ # การสร้างการกำหนดค่าเซิร์ฟเวอร์ Stunnel
+ cat << 'MyStunnelC'> /etc/stunnel/stunnel.conf
+# การกำหนดค่า Stunnel ของฉัน
+pid = /var/run/stunnel.pid
+ใบรับรอง = /etc/stunnel/stunnel.pem
+ไคลเอนต์ = ไม่
+ซ็อกเก็ต = l: TCP_NODELAY = 1
+ซ็อกเก็ต = r: TCP_NODELAY = 1
+TIMEOUTclose = 0
+
+[dropbear]
+ยอมรับ = Stunnel_Port1
+เชื่อมต่อ = 127.0.0.1:dropbear_port_c
+
+[openssh]
+ยอมรับ = Stunnel_Port2
+เชื่อมต่อ = 127.0.0.1:openssh_port_c
+MyStunnelC
+
+ # การตั้งค่าพอร์ต Stunnel
+ sed -i "s | Stunnel_Port1 | $ Stunnel_Port1 | g" /etc/stunnel/stunnel.conf
+ sed -i "s | dropbear_port_c | $ (netstat -tlnp | grep -i dropbear | awk '{print $ 4}' | cut -d: -f2 | xargs | awk '{print $ 2}' | head -n1) | g "/etc/stunnel/stunnel.conf
+ sed -i "s | Stunnel_Port2 | $ Stunnel_Port2 | g" /etc/stunnel/stunnel.conf
+ sed -i "s | openssh_port_c | $ (netstat -tlnp | grep -i ssh | awk '{print $ 4}' | cut -d: -f2 | xargs | awk '{print $ 2}' | head -n1) | g "/etc/stunnel/stunnel.conf
+
+ # เริ่มบริการ Stunnel ใหม่
+ systemctl รีสตาร์ท $ StunnelDir
+
+}
+
+ฟังก์ชัน InsOpenVPN () {
+ # ตรวจสอบว่าโฟลเดอร์ openvpn ถูกลบโดยไม่ได้ตั้งใจหรือถูกลบออก
+ ถ้า [[! -e / etc / openvpn]]; แล้ว
+  mkdir -p / etc / openvpn
+ fi
+
+ # การลบไฟล์เซิร์ฟเวอร์ openvpn ที่มีอยู่ทั้งหมด
+ rm -rf / etc / openvpn / *
+
+ # การสร้าง server.conf, ca.crt, server.crt และ server.key
+ แมว << 'myOpenVPNconf'> /etc/openvpn/server_tcp.conf
+# OpenVPN TCP
+พอร์ต OVPNTCP
+โปรโต tcp
+dev tun
+ca /etc/openvpn/ca.crt
+ใบรับรอง /etc/openvpn/server.crt
+คีย์ /etc/openvpn/server.key
+dh /etc/openvpn/dh2048.pem
+ยืนยันไคลเอ็นต์ใบรับรองไม่มี
+ชื่อผู้ใช้เป็นชื่อสามัญ
+ทิศทางที่สำคัญ 0
+ปลั๊กอิน /etc/openvpn/plugins/openvpn-plugin-auth-pam.so เข้าสู่ระบบ
+เซิร์ฟเวอร์ 10.200.0.0 255.255.0.0
+ifconfig-pool-persist ipp.txt
+ผลักดัน "route-method exe"
+ดัน "route-delay 2"
+Keepalive 10 120
+คอมพ์ -Lzo
+ผู้ใช้ไม่มีใคร
+กลุ่ม nogroup
+ปุ่มคงอยู่
+ยังคงอยู่
+สถานะ openvpn-status.log
+บันทึก tcp.log
+กริยา 2
+ncp- ปิดการใช้งาน
+ไม่มีการเข้ารหัส
+ไม่รับรองความถูกต้อง
+myOpenVPNconf
+
+แมว << 'myOpenVPNconf2'> /etc/openvpn/server_udp.conf
+# OpenVPN UDP
+พอร์ต OVPNUDP
+โปรโต udp
+dev tun
+ca /etc/openvpn/ca.crt
+ใบรับรอง /etc/openvpn/server.crt
+คีย์ /etc/openvpn/server.key
+dh /etc/openvpn/dh2048.pem
+ยืนยันไคลเอ็นต์ใบรับรองไม่มี
+ชื่อผู้ใช้เป็นชื่อสามัญ
+ทิศทางที่สำคัญ 0
+ปลั๊กอิน /etc/openvpn/plugins/openvpn-plugin-auth-pam.so เข้าสู่ระบบ
+เซิร์ฟเวอร์ 10.201.0.0 255.255.0.0
+ifconfig-pool-persist ipp.txt
+ผลักดัน "route-method exe"
+ดัน "route-delay 2"
+Keepalive 10 120
+คอมพ์ -Lzo
+ผู้ใช้ไม่มีใคร
+กลุ่ม nogroup
+ปุ่มคงอยู่
+ยังคงอยู่
+สถานะ openvpn-status.log
+บันทึก udp.log
+กริยา 2
+ncp- ปิดการใช้งาน
+ไม่มีการเข้ารหัส
+ไม่รับรองความถูกต้อง
+myOpenVPNconf2
+
+ cat << 'EOF7'> /etc/openvpn/ca.crt
+----- เริ่มต้นการรับรอง -----
+MIIFDDCCA / SgAwIBAgIJAIxbDcvh6vPEMA0GCSqGSIb3DQEBCwUAMIG0MQswCQYD
+VQQGEwJQSDEPMA0GA1UECBMGVGFybGFjMRMwEQYDVQQHEwpDb25jZXBjaW9uMRMw
+EQYDVQQKEwpKb2huRm9yZFRWMRMwEQYDVQQLEwpKb2huRm9yZFRWMRIwEAYDVQQD
+EwlEZWJpYW5WUE4xHTAbBgNVBCkTFEpvaG4gRm9yZCBNYW5naWxpbWFuMSIwIAYJ
+KoZIhvcNAQkBFhNhZG1pbkBqb2huZm9yZHR2Lm1lMB4XDTE5MTEyNTA4MDUzMFoX
+DTI5MTEyMjA4MDUzMFowgbQxCzAJBgNVBAYTAlBIMQ8wDQYDVQQIEwZUYXJsYWMx
+EzARBgNVBAcTCkNvbmNlcGNpb24xEzARBgNVBAoTCkpvaG5Gb3JkVFYxEzARBgNV
+BAsTCkpvaG5Gb3JkVFYxEjAQBgNVBAMTCURlYmlhblZQTjEdMBsGA1UEKRMUSm9o
+biBGb3JkIE1hbmdpbGltYW4xIjAgBgkqhkiG9w0BCQEWE2FkbWluQGpvaG5mb3Jk
+dHYubWUwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCf + WkN868YMiCl
+d3z1Tq2OeRNb6ljiRGzEi1qrIvj / gXq6o0QD0SD + Nf3QWJrrJYFi1GECq72PN ทำไม
+2jLFgZH0RRLOVZfG + jwZ9itxofweiwALvgMdz2e + mpQItMxKh1ZYkzNw + 4zJ7zJV
+u0Tq7YGPaMFPkLNU3V454rDYCdI8GG / wPDoW5FMc3FogI8fwylQvTWyE0yxHMxH6
+FkISA5hOuSo6MO1FgAfDdNNwxa / MAbpHwJ + W6RBHv4lhE6bQePMCj / 90pgt3NpxF
+ฉัน ++ qwpSRfOR6OuuyDr1c ++ z6qhjLB7YzDLzj + HXCyfsPWPj + gJ0 + 3ckhW4gf / nhR
+ยูบี + BTd8fAgMBAAGjggEdMIIBGTAdBgNVHQ4EFgQULXGeDQBLXCPId0F3r / 58FDCm
+jC4wgekGA1UdIwSB4TCB3oAULXGeDQBLXCPId0F3r / 58FDCmjC6hgbqkgbcwgbQx
+CzAJBgNVBAYTAlBIMQ8wDQYDVQQIEwZUYXJsYWMxEzARBgNVBAcTCkNvbmNlcGNp
+b24xEzARBgNVBAoTCkpvaG5Gb3JkVFYxEzARBgNVBAsTCkpvaG5Gb3JkVFYxEjAQ
+BgNVBAMTCURlYmlhblZQTjEdMBsGA1UEKRMUSm9obiBGb3JkIE1hbmdpbGltYW4x
+IjAgBgkqhkiG9w0BCQEWE2FkbWluQGpvaG5mb3JkdHYubWWCCQCMWw3L4erzxDAM
+BgNVHRMEBTADAQH / MA0GCSqGSIb3DQEBCwUAA4IBAQBZUpwZ + LQWAQI8VW3hdZVN
+WV + P12yYQ1UzyagtB3MqBR4aZhjk42NFBrwPZwpvWUXB0GB4DhBuvbVPtqnt5p4V
+sDtQ6vKYeDlE / KDGDc0oJDsgxo2wwIXy + y / 14EDqidAVjtf1rk5MDAAEVvonHxkP
+861kzoIOZ0 + D7sJDo3aZ8uNy8UznrRSzLDT63o28DkL3iLASyt1GHWu05wYmgzsg
+ม + w + AWvN5rL65mzyn / Bipf0I9snVB4saCgfy7TCI / 4slOcMCNc2e6oOwOLvFA + s8
+dZMt2qg62PEOj / LblYGD + qLn0xLRwqK0UWSmWobz5LXoxyssZLK2KiMkS41PHkfh
+----- สิ้นสุดการรับรอง -----
+EOF7
+ cat << 'EOF9'> /etc/openvpn/server.crt
+ใบรับรอง:
+    ข้อมูล:
+        เวอร์ชัน: 3 (0x2)
+        หมายเลขผลิตภัณฑ์: 1 (0x1)
+    อัลกอริทึมลายเซ็น: sha256WithRSAEncryption
+        ผู้ออก: C = PH, ST = Tarlac, L = Concepcion, O = PR Aiman, OU = PR Aiman, CN = DebianVPN / name = John Ford Mangiliman / emailAddress = admin @ PR Aiman.me
+        ความถูกต้อง
+            ไม่ทัน: 25 พ.ย. 08:06:59 น. GMT
+            หลัง: 22 พ.ย. 08:06:59 น. 2029 GMT
+        เรื่อง: C = PH, ST = Tarlac, L = Concepcion, O = PR Aiman, OU = PR Aiman, CN = DebianVPN / name = John Ford Mangiliman / emailAddress = admin @ PR Aiman.me
+        ข้อมูลคีย์สาธารณะของหัวเรื่อง:
+            อัลกอริทึมคีย์สาธารณะ: rsaEncryption
+                คีย์สาธารณะ: (2048 บิต)
+                โมดูลัส:
+                    00: c6: 6d: 3 มิติ: 64: 58: 08: e2: 70: 9b: a3: 55: 75: ec: 5a:
+                    6e: 9d: bc: 7c: 45: f5: 64: c5: f6: 23: 2e: b0: 1f: 28: 2e:
+                    cb: 60: 8d: 71: 73: 3d: c4: e6: f7: e3: 36: 0b: โฆษณา: 9d: 87:
+                    f5: 4b: 2f: 85: 5f: d8: c9: 88: d9: 86: 4a: 52: ce: 2b: 39:
+                    c6: b9: 83: e0: 7e: ab: 8e: 1f: 2f: 11: cc: 08: 15: 12: 62:
+                    วันที่: 8d: 94: b1: 79: 3c: 52: d9: cb: 0a: 6a: db: 64: 8b: ff:
+                    c7: 41: 5c: ซีซี: f9: 18: 4f: 74: 1a: e7: c1: b4: b8: 89: fd:
+                    56: 5f: 5c: 65: c4: 21: a8: 08: 98: 3d: 8e: 35: 44: b3: 6f:
+                    93: b5: 01: 59: b4: 35: 23: 99: 00: 79: ฟะ: 44: df: b3: 4c:
+                    76: bf: 3c: e4: f7: 39: 3e: 50: e0: fe: 85: 8c: a0: e2: 63:
+                    b1: ec: a3: 32: cd: 6b: 9d: 5a: 0e: f6: 66: 92: ac: 6f: 15:
+                    5e: bb: 3a: 48: d9: 3d: 63: 94: ff: 9c: fb: d2: fe: 5a: 11:
+                    b5: 1a: c1: 6c: 8a: 9e: d3: 29: 8d: d6: ff: fc: 9f: 9f: a4:
+                    โฆษณา: 9d: a0: ca: 2b: 6f: 63: 47: 7f: 7b: 3c: 98: bf: 14: 18:
+                    6c: 36: 38: 7a: c3: 5d: a9: 5a: 26: 28: 12: 33: 9d: 17: 1b:
+                    6f: 2f: 5d: 33: e7: b5: 8f: 57: 3a: 3a: 29: 57: 6a: 0e: 9e:
+                    84: 7a: 60: d9: 9c: fb: c7: f3: f8: 93: a7: cd: 43: 89: ec:
+                    3f: d3
+                เลขชี้กำลัง: 65537 (0x10001)
+        ส่วนขยาย X509v3:
+            X509v3 ข้อ จำกัด พื้นฐาน:
+                CA: FALSE
+            Netscape Cert ประเภท:
+                เซิร์ฟเวอร์ SSL
+            ความคิดเห็นของ Netscape:
+                ใบรับรองเซิร์ฟเวอร์ที่สร้างขึ้นอย่างง่าย RSA
+            X509v3 Subject Key Identifier:
+                50: 31: 04: C4: 7A: 47: C1: DA: 46: CC: 77: 38: DE: 1C: 63: 10: 40: C3: 80: 22
+            ตัวระบุคีย์ผู้มีอำนาจ X509v3:
+                คีย์ด: 2D: 71: 9E: 0D: 00: 4B: 5C: 23: C8: 77: 41: 77: AF: FE: 7C: 14: 30: A6: 8C: 2E
+                DirName: / C = PH / ST = Tarlac / L = Concepcion / O = PR Aiman ​​/ OU = PR Aiman ​​/ CN = DebianVPN / name = John Ford Mangiliman / emailAddress = admin @ PR Aiman.me
+                อนุกรม: 8C: 5B: 0D: CB: E1: EA: F3: C4
+
+            X509v3 Extended Key การใช้งาน:
+                TLS Web Server Authentication
+            การใช้งานคีย์ X509v3:
+                ลายเซ็นดิจิทัลการเข้ารหัสคีย์
+            X509v3 Subject Alternative Name:
+                DNS: เซิร์ฟเวอร์
+    อัลกอริทึมลายเซ็น: sha256WithRSAEncryption
+         87: 59: 21: fd: 7d: 41: c8: 87: 8f: ff: 13: 85: e9: ae: 31: da: 43: bc:
+         48: 3b: 32: 41: ba: 65: 82: 9e: 76: 25: cd: 43: 8b: fc: 07: 16: 49: c3:
+         8d: bd: โฆษณา: bf: 0e: f6: d3: 53: 35: de: f2: c6: a6: 62: c2: 79: e1: 49:
+         a5: ba: 55: cf: b9: e9: 58: d8: e5: 02: 96: 0a: 2a: 97: 7d: 82: 85: 0b:
+         38: b5: dc: 0d: 6b: bd: 51: a6: f7: 3f: 71: 94: 90: c9: โฆษณา: 51: 69: 15:
+         24: 58: 04: 99: 96: 69: 40: 9d: a1: 9c: 1c: a3: 34: be: b9: c2: 86: 61:
+         ab: 18: 03: 9b: 27: b1: 9f: 1d: a3: 5e: 29: 47: 16: 6f: 7e: 55: 62: 93:
+         57: 85: 45: 34: 2c: cb: 10: 2c: da: f0: 9a: ee: 3d: b2: 92: 87: d4: 7e:
+         1b: c7: 66: 22: e9: 4c: a2: 95: d0: df: 32: 1a: 87: ce: 8a: 27: 08: f2:
+         87: a9: e6: eb: 16: 37: 71: 35: 37: 4d: 8c: 0e: df: 12: d3: e0: 63: 0a:
+         53: 7d: c8: 02: c5: 34: c5: 23: 68: c3: ba: 33: 5b: โฆษณา: 92: bd: e2: d0:
+         9d: bc: bd: bd: 0d: 64: 50: 0f: f4: bd: 91: fc: 10: e0: ec: 01: e8: a1:
+         50: ed: 79: bf: 12: 49: bc: a4: 93: 17: d6: 71: ed: 9e: 99: f3: 42: 6d:
+         26: b3: 2d: ac: 32: 62: 98: 71: d1: e4: 83: 6c: 58: 02: e6: 49: b6: c9:
+         73: 76: eb: 8b
+----- เริ่มต้นการรับรอง -----
+MIIFfzCCBGegAwIBAgIBATANBgkqhkiG9w0BAQsFADCBtDELMAkGA1UEBhMCUEgx
+DzANBgNVBAgTBlRhcmxhYzETMBEGA1UEBxMKQ29uY2VwY2lvbjETMBEGA1UEChMK
+Sm9obkZvcmRUVjETMBEGA1UECxMKSm9obkZvcmRUVjESMBAGA1UEAxMJRGViaWFu
+VlBOMR0wGwYDVQQpExRKb2huIEZvcmQgTWFuZ2lsaW1hbjEiMCAGCSqGSIb3DQEJ
+ARYTYWRtaW5Aam9obmZvcmR0di5tZTAeFw0xOTExMjUwODA2NTlaFw0yOTExMjIw
+ODA2NTlaMIG0MQswCQYDVQQGEwJQSDEPMA0GA1UECBMGVGFybGFjMRMwEQYDVQQH
+EwpDb25jZXBjaW9uMRMwEQYDVQQKEwpKb2huRm9yZFRWMRMwEQYDVQQLEwpKb2hu
+Rm9yZFRWMRIwEAYDVQQDEwlEZWJpYW5WUE4xHTAbBgNVBCkTFEpvaG4gRm9yZCBN
+YW5naWxpbWFuMSIwIAYJKoZIhvcNAQkBFhNhZG1pbkBqb2huZm9yZHR2Lm1lMIIB
+IjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxm09ZFgI4nCbo1V17Fpunbx8
+RfVkxfYjLrAfKC7LYI1xcz3E5vfjNgutnYf1Sy + FX9jJiNmGSlLOKznGuYPgfquO
+Hy8RzAgVEmLdjZSxeTxS2csKattki // HQVzM + RhPdBrnwbS4if1WX1xlxCGoCJg9
+jjVEs2 + TtQFZtDUjmQB5 + kTfs0x2vzzk9zk + UOD + hYyg4mOx7KMyzWudWg72ZpKs
+bxVeuzpI2T1jlP + c + 9L + WhG1GsFsip7TKY3W // yfn6StnaDKK29jR397PJi / FBhs
+Njh6w12pWiYoEjOdFxtvL10z57WPVzo6KVdqDp6EemDZnPvH8 / iTp81Diew / 0wID
+AQABo4IBmDCCAZQwCQYDVR0TBAIwADARBglghkgBhvhCAQEEBAMCBkAwNAYJYIZI
+AYb4QgENBCcWJUVhc3ktUlNBIEdlbmVyYXRlZCBTZXJ2ZXIgQ2VydGlmaWNhdGUw
+HQYDVR0OBBYEFFAxBMR6R8HaRsx3ON4cYxBAw4AiMIHpBgNVHSMEgeEwgd6AFC1x
+ng0AS1wjyHdBd6 / + fBQwpowuoYG6pIG3MIG0MQswCQYDVQQGEwJQSDEPMA0GA1UE
+CBMGVGFybGFjMRMwEQYDVQQHEwpDb25jZXBjaW9uMRMwEQYDVQQKEwpKb2huRm9y
+ZFRWMRMwEQYDVQQLEwpKb2huRm9yZFRWMRIwEAYDVQQDEwlEZWJpYW5WUE4xHTAb
+BgNVBCkTFEpvaG4gRm9yZCBNYW5naWxpbWFuMSIwIAYJKoZIhvcNAQkBFhNhZG1p
+bkBqb2huZm9yZHR2Lm1lggkAjFsNy + Hq88QwEwYDVR0lBAwwCgYIKwYBBQUHAwEw
+CwYDVR0PBAQDAgWgMBEGA1UdEQQKMAiCBnNlcnZlcjANBgkqhkiG9w0BAQsFAAOC
+AQEAh1kh / X1ByIeP / xOF6a4x2kO8SDsyQbplgp52Jc1Di / wHFknDjb2tvw7201M1
+3vLGpmLCeeFJpbpVz7npWNjlApYKKpd9goULOLXcDWu9Uab3P3GUkMmtUWkVJFgE
+mZZpQJ2hnByjNL65woZhqxgDmyexnx2jXilHFm9 + VWKTV4VFNCzLECza8JruPbKS
+h9R + G8dmIulMopXQ3zIah86KJwjyh6nm6xY3cTU3TYwO3xLT4GMKU33IAsU0xS ไม่มี
+w7ozW62SveLQnby9vQ1kUA / 0vZH8EODsAeihUO15vxJJvKSTF9Zx7Z6Z80JtJrMt
+rDJimHHR5INsWALmSbbJc3briw ==
+----- สิ้นสุดการรับรอง -----
+EOF9
+ cat << 'EOF10'> /etc/openvpn/server.key
+----- เริ่มคีย์ส่วนตัว -----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDGbT1kWAjicJuj
+VXXsWm6dvHxF9WTF9iMusB8oLstgjXFzPcTm9 + M2C62dh / VLL4Vf2MmI2YZKUs4r
+Oca5g + B + q44fLxHMCBUSYt2NlLF5PFLZywpq22SL / 8dBXMz5GE90GufBtLiJ / VZf
+XGXEIagImD2ONUSzb5O1AVm0NSOZAHn6RN + zTHa / POT3OT5Q4P6FjKDiY7HsozLN
+a51aDvZmkqxvFV67OkjZPWOU / 5z70v5aEbUawWyKntMpjdb // J + fpK2doMorb2NH
+f3s8mL8UGGw2OHrDXalaJigSM50XG28vXTPntY9XOjopV2oOnoR6YNmc + 8fz + JOn
+zUOJ7D / TAgMBAAECggEBALidRIRKwCFmIfhKeAfqb4aEqp8wXI0un7c9mA970i9I
+CijtbHh0ZEqRfPvXViqY0R / HBGM195LJDhb7j2BlSYaxOO7cjVNmpaxQnc + va5vf
+uzn1hgC7lQYIeSvgGrkbnDjrG3uHGDcSpLzeq7RamAs / Ee5wszW7dxLuabaXxkH /
+owRXl6wvwD1WNGZsWJe8eP6GtBePm9 + Ls5VLN0DPWyuJCFxhN / VpvvphECFt7EPF
+qY + ysAFqfSYkCyH7OklnLIx1jQ04iLbZ4HI + S9QH + w1261fDgCXAmf1kgXkgLaM6
+4wK + e93JRyqw87NZZIKN3ooq35n6wAUaS2erIYQFjrkCgYEA5c6qeNORIuq4F1jP
+JS9aaXEjaAKIgw20qTyZfhQv6AhkJ7GASgWSdBIIfZQo1JG4EsXwqQ / 0x9EwDOVu
+glTYMT3tMi0zrzMklYS1G8iQElywAfTro / 8sngfimvkQeRljoNdlrzO4 + knUXmV8
+DymPDH6UGlhj2FwCFN + obhT1f48CgYEA3QrzBK + YRu6iqeMuifwXlcbUS / A + dBPJ
+qoYDzM6Zc0LYRTZSqhEHC8XkcQp / 18LUxXFSrZXP2lcKmkqg4pgeAxALRLJW2pfz
+yAm1Hah5JXlvTjX4HnMTFL4fvB0oGZXsAimPNa / wUZvTSPYJRziZdEwVubW3AAxE
+THN3qxXoGX0CgYAWeSxwnnf + CygvmE7BmyzjTN4iiMTi1A9L0ZJNIxpAPbnVq + UY
+2AynbzAHX9rSVuHCbDsJvXa5p7pkOHejJTrzLdQpaQQ56O119cFkUyvLr + bCejol
+EopBdhHyB9NVlGcKzqWyCYPYbinnhVMphG3p0eMX5Hb3LKBDfE / TXBdZ / wKBgEwe
+3iup8M3Ulk3c / 4TjPJgGvctc85Tzz4oa1qosJ6oKxgGnwHXyoTOLtay8CeSaor1P
+1kITCl5NhUg3FQqTihpR5x + ELubeV0R3G1kYUIf4Nr1 / Vm / d / x8wjisw + 0M8Xucr
+urapXSAtgmho2i8drbLgFMc8bcXlc4vEY9yWEbTdAoGAMa6KTb0U9M47mpJb23zu
+WiO8mFqSPYAnhHmXOiBOPlCoVpRbPquk3Xq32g9KU97jPNrH4X2HKgYpboMTWYOJ
+kR3Y5UeFF1xurA / RXUEREcP1zg6Uei5aj7S4Sp7CVfIQCOpJ8S / I4CZdAcvwY + pI
+ZTC1 + KZJbFyPwFcrIylEeBc =
+----- สิ้นสุดคีย์ส่วนตัว -----
+EOF10
+ cat << 'EOF13'> /etc/openvpn/dh2048.pem
+----- เริ่มต้นพารามิเตอร์ DH -----
+MIIBCAKCAQEAlrn8QcDrwXzqWCI7NMhPJVgEjdSxvyHw3EDVN8JrVfMegnvZA0VZ
+St3hduXTzlT7ceUGIxTJpM8RE6d3f1mMPnZJ4hBxJzzjrwMgSCupJrQDjSAIWGLZ
+elcmJS6WOAibpxzFIiPB6pRjoLaJF8b / J + YnO0bLUt1senWkg9ql8mU74VM1aG3A
+jOPztpLqYIRwla11bqAl4UcFLBI + PXAcPJsAIfzZ3DMn7aOa3Or6UjSmVQ8jGY / 8
+1F0T67NgB8U7FrOVNimRlWfSJ // FiJkP0PScHVX2NQ0Cgwdo + wekjoFN5xbPxicc
+LxNkdRPpCACgzdo1M77xVsurtfcxsz + RswIBAg ==
+----- สิ้นสุดพารามิเตอร์ DH -----
+EOF13
+
+ # รับ DNS ทั้งหมดภายใน resolv.conf จากนั้นใช้เป็น DNS เริ่มต้นสำหรับเซิร์ฟเวอร์ openvpn ของเรา
+ grep -v '#' /etc/resolv.conf | grep 'nameserver' | grep -E -o '[0-9] {1,3} \. [0-9] {1,3} \. [0-9] {1,3} \. [0-9] {1, 3} '| ในขณะที่อ่าน -r บรรทัด; ทำ
+	echo "push \" dhcp-option DNS $ line \ "" >> /etc/openvpn/server_tcp.conf
+เสร็จแล้ว
+
+ # การสร้างข้อความอัพเดตใหม่ใน server.conf
+ cat << 'NUovpn'> /etc/openvpn/server.conf
+ # อัปเดตใหม่เปิดตัวแล้วเซิร์ฟเวอร์ OpenVPN
+ # กำลังเรียกใช้ทั้งโปรโตคอล TCP และ UDP (ทั้งสองทำงานบน IPv4 เท่านั้น)
+ # แต่เซิร์ฟเวอร์ดั้งเดิมของเราถูกลบและแบ่งออกแล้ว
+ # เป็นสองการกำหนดค่าที่แตกต่างกันตามโปรโตคอลของพวกเขา:
+ # * OpenVPN TCP (อยู่ที่ /etc/openvpn/server_tcp.conf
+ # * OpenVPN UDP (อยู่ที่ /etc/openvpn/server_udp.conf
+ # 
+ # นอกจากนี้ไฟล์บันทึกอื่น ๆ เช่น
+ # บันทึกสถานะและบันทึกเซิร์ฟเวอร์
+ # ถูกย้ายไปยังชื่อไฟล์ใหม่ที่แตกต่างกัน:
+ # * บันทึกเซิร์ฟเวอร์ OpenVPN TCP (/etc/openvpn/tcp.log)
+ # * บันทึกเซิร์ฟเวอร์ OpenVPN UDP (/etc/openvpn/udp.log)
+ # * บันทึกสถานะ OpenVPN TCP (/etc/openvpn/tcp_stats.log)
+ # * บันทึกสถานะ UDP OpenVPN (/etc/openvpn/udp_stats.log)
+ #
+ # พอร์ตเซิร์ฟเวอร์ถูกกำหนดค่าตาม env vars
+ # เรียกใช้ / ยกจากสคริปต์นี้ (OpenVPN_TCP_Port / OpenVPN_UDP_Port)
+ #
+ # สนุกกับการอัปเดตใหม่
+ # สคริปต์อัปเดตโดย 
+NUovpn
+
+ # การตั้งค่าพอร์ตเซิร์ฟเวอร์ openvpn
+ sed -i "s | OVPNTCP | $ OpenVPN_TCP_Port | g" /etc/openvpn/server_tcp.conf
+ sed -i "s | OVPNUDP | $ OpenVPN_UDP_Port | g" /etc/openvpn/server_udp.conf
+ 
+ # รับปลั๊กอิน OpenVPN สำหรับการตรวจสอบสิทธิ์ Unix
+ ซีดี
+ wget https://github.com/javakeisha/debian9sc/raw/main/files/plugins/plugin.tgz
+ tar -xzvf /root/plugin.tgz -C / etc / openvpn /
+ rm -f plugin.tgz
+ 
+ # วิธีแก้ปัญหาบางประการสำหรับเครื่อง OpenVZ สำหรับบริการ openvpn "ข้อผิดพลาดในการเริ่มต้น"
+ ถ้า [["$ (hostnamectl | grep -i Virtualization | awk '{print $ 2}' | head -n1)" == 'openvz']]; แล้ว
+ sed -i 's | LimitNPROC | #LimitNPROC | g' / lib / systemd / system / openvpn *
+ systemctl daemon-reload
+fi
+
+ # อนุญาตการส่งต่อ IPv4
+ sed -i '/net.ipv4.ip_forward.*/d' /etc/sysctl.conf
+ sed -i '/net.ipv4.ip_forward.*/d' /etc/sysctl.d/*.conf
+ echo 'net.ipv4.ip_forward = 1'> /etc/sysctl.d/20-openvpn.conf
+ sysctl - ระบบ &> / dev / null
+
+ # กฎ Iptables สำหรับเซิร์ฟเวอร์ OpenVPN
+ cat << 'EOFipt'> /etc/openvpn/openvpn.bash
+#! / bin / ทุบตี
+PUBLIC_INET = "$ (ip -4 เส้นทาง ls | grep default | grep -Po '(? <= dev) (\ S +)' | head -1)"
+IPCIDR = '10 .200.0.0 / 16 '
+IPCIDR2 = '10 .201.0.0 / 16 '
+iptables -I FORWARD -s $ IPCIDR -j ยอมรับ
+iptables -I FORWARD -s $ IPCIDR2 -j ยอมรับ
+iptables -t nat -A POSTROUTING -o $ PUBLIC_INET -j MASQUERADE
+iptables -t nat -A POSTROUTING -s $ IPCIDR -o $ PUBLIC_INET -j MASQUERADE
+iptables -t nat -A POSTROUTING -s $ IPCIDR2 -o $ PUBLIC_INET -j MASQUERADE
+EOFipt
+ chmod + x /etc/openvpn/openvpn.bash
+ ทุบตี /etc/openvpn/openvpn.bash
+
+ # การเปิดใช้งานการส่งต่อ IPv4
+ เสียงสะท้อน 1> / proc / sys / net / ipv4 / ip_forward
+ 
+ # เริ่มต้นเซิร์ฟเวอร์ OpenVPN
+ systemctl เริ่ม openvpn @ server_tcp
+ systemctl เปิดใช้งาน openvpn @ server_tcp
+ systemctl เริ่ม openvpn @ server_udp
+ systemctl เปิดใช้งาน openvpn @ server_udp
+}
+ ฟังก์ชัน InsProxy () {
+
+ # การลบการกำหนดค่า privoxy ที่ซ้ำกัน
+ rm -rf / etc / privoxy / config *
+ 
+ # การสร้างการกำหนดค่าเซิร์ฟเวอร์ Privoxy โดยใช้เทคนิค cat eof
+ cat << 'privoxy'> / etc / privoxy / config
+# การกำหนดค่าเซิร์ฟเวอร์ Privoxy ของฉัน
+คู่มือผู้ใช้ / usr / share / doc / privoxy / user-manual
+confdir / etc / privoxy
+logdir / var / log / privoxy
+filterfile default.filter
+ไฟล์บันทึก logfile
+ฟังที่อยู่ 0.0.0.0:Privoxy_Port1
+ฟังที่อยู่ 0.0.0.0:Privoxy_Port2
+สลับ 1
+เปิดใช้งานระยะไกลสลับ 0
+เปิดใช้งานระยะไกล http-toggle 0
+เปิดใช้งานแก้ไขการกระทำ 0
+บังคับบล็อก 0
+ขีด จำกัด บัฟเฟอร์ 4096
+เปิดใช้งานพร็อกซีการพิสูจน์ตัวตนส่งต่อ 1
+ส่งต่อ - เชื่อมต่อ - ลองใหม่ 1
+รับ - สกัดกั้นคำขอ 1
+อนุญาต cgi ขอกระทืบ 1
+แยกขนาดใหญ่รูปแบบ 0
+ให้มีชีวิตอยู่ - หมดเวลา 5
+ท่อทน 1
+ซ็อกเก็ตหมดเวลา 300
+อนุญาตให้เข้าถึง 0.0.0.0/0 IP-ADDRESS
+สิทธิพิเศษ
+
+ # การตั้งค่าที่อยู่ IP ของเครื่องภายในการกำหนดค่า privoxy ของเรา (การรักษาความปลอดภัยที่อนุญาตให้เครื่องนี้ใช้พร็อกซีเซิร์ฟเวอร์นี้เท่านั้น)
+ sed -i "s | ที่อยู่ IP | $ IPADDR | g" / etc / privoxy / config
+ 
+ # การตั้งค่าพอร์ต privoxy
+ sed -i "s | Privoxy_Port1 | $ Privoxy_Port1 | g" / etc / privoxy / config
+ sed -i "s | Privoxy_Port2 | $ Privoxy_Port2 | g" / etc / privoxy / config
+
+ # การลบการกำหนดค่า Squid ที่ซ้ำกัน
+ rm -rf /etc/squid/squid.con*
+ 
+ # การสร้างการกำหนดค่าเซิร์ฟเวอร์ Squid โดยใช้เทคนิค cat eof
+ cat << 'mySquid'> /etc/squid/squid.conf
+# การกำหนดค่าเซิร์ฟเวอร์ Squid Proxy ของฉัน
+acl VPN dst ที่อยู่ IP / 32
+http_access อนุญาต VPN
+http_access ปฏิเสธทั้งหมด 
+http_port Squid_Port1
+http_port Squid_Port2
+http_port Squid_Port3
+### อนุญาตส่วนหัว
+request_header_access อนุญาตให้ทั้งหมด 
+request_header_access Authorization อนุญาตทั้งหมด 
+request_header_access WWW-Authenticate อนุญาตให้ทั้งหมด 
+request_header_access Proxy-Authorization อนุญาตทั้งหมด 
+request_header_access Proxy-Authenticate อนุญาตทั้งหมด 
+request_header_access Cache-Control อนุญาตทั้งหมด 
+request_header_access การเข้ารหัสเนื้อหาอนุญาตทั้งหมด 
+request_header_access ความยาวของเนื้อหาอนุญาตทั้งหมด 
+request_header_access Content-Type อนุญาตทั้งหมด 
+request_header_access วันที่อนุญาตทั้งหมด 
+request_header_access Expires อนุญาตให้ทั้งหมด 
+request_header_access โฮสต์อนุญาตทั้งหมด 
+request_header_access If-Modified-Since อนุญาตทั้งหมด 
+request_header_access Last-Modified อนุญาตทั้งหมด 
+request_header_access ตำแหน่งอนุญาตทั้งหมด 
+request_header_access Pragma อนุญาตทั้งหมด 
+request_header_access ยอมรับอนุญาตทั้งหมด 
+request_header_access Accept-Charset อนุญาตทั้งหมด 
+request_header_access การเข้ารหัสยอมรับอนุญาตทั้งหมด 
+request_header_access ภาษาที่ยอมรับอนุญาตทั้งหมด 
+request_header_access Content-Language อนุญาตทั้งหมด 
+request_header_access Mime-Version อนุญาตทั้งหมด 
+request_header_access Retry-After อนุญาตทั้งหมด 
+request_header_access Title อนุญาตทั้งหมด 
+request_header_access Connection อนุญาตทั้งหมด 
+request_header_access Proxy-Connection อนุญาตทั้งหมด 
+request_header_access User-Agent อนุญาตทั้งหมด 
+request_header_access Cookie อนุญาตทั้งหมด 
+request_header_access ทั้งหมดปฏิเสธทั้งหมด
+### HTTP Anonymizer ทำให้หวาดระแวง
+reply_header_access อนุญาตให้ทั้งหมด 
+reply_header_access Authorization อนุญาตทั้งหมด 
+reply_header_access WWW-Authenticate อนุญาตให้ทั้งหมด 
+reply_header_access Proxy-Authorization อนุญาตทั้งหมด 
+reply_header_access Proxy-Authenticate อนุญาตทั้งหมด 
+reply_header_access Cache-Control อนุญาตทั้งหมด 
+reply_header_access การเข้ารหัสเนื้อหาอนุญาตทั้งหมด 
+reply_header_access ความยาวของเนื้อหาอนุญาตทั้งหมด 
+reply_header_access ประเภทเนื้อหาอนุญาตทั้งหมด 
+reply_header_access วันที่อนุญาตทั้งหมด 
+reply_header_access หมดอายุอนุญาตทั้งหมด 
+reply_header_access โฮสต์อนุญาตทั้งหมด 
+reply_header_access If-Modified-Since อนุญาตทั้งหมด 
+reply_header_access Last-Modified allow all 
+reply_header_access ตำแหน่งอนุญาตทั้งหมด 
+reply_header_access Pragma อนุญาตทั้งหมด 
+reply_header_access ยอมรับอนุญาตทั้งหมด 
+reply_header_access Accept-Charset อนุญาตทั้งหมด 
+reply_header_access การเข้ารหัสยอมรับอนุญาตทั้งหมด 
+reply_header_access ภาษาที่ยอมรับอนุญาตทั้งหมด 
+reply_header_access เนื้อหา - ภาษาอนุญาตทั้งหมด 
+reply_header_access Mime-Version อนุญาตทั้งหมด 
+reply_header_access Retry-After อนุญาตทั้งหมด 
+reply_header_access Title allow all 
+reply_header_access การเชื่อมต่ออนุญาตทั้งหมด 
+reply_header_access Proxy-Connection อนุญาตทั้งหมด 
+reply_header_access User-Agent อนุญาตทั้งหมด 
+reply_header_access คุกกี้อนุญาตทั้งหมด 
+reply_header_access ทั้งหมดปฏิเสธทั้งหมด
+### CoreDump
+coredump_dir / var / สปูล / ปลาหมึก
+dns_nameservers 8.8.8.8 8.8.4.4
+refresh_pattern ^ ftp: 1440 20% 10080
+refresh_pattern ^ gopher: 1440 0% 1440
+refresh_pattern -i (/ cgi-bin / | \?) 0 0% 0
+refresh_pattern 0 20% 4320
+visible_hostname PR Aiman
+mySquid
+
+ # การตั้งค่าที่อยู่ IP ของเครื่องภายในการกำหนดค่า Squid ของเรา (การรักษาความปลอดภัยที่อนุญาตให้เครื่องนี้ใช้พร็อกซีเซิร์ฟเวอร์นี้เท่านั้น)
+ sed -i "s | ที่อยู่ IP | $ IPADDR | g" /etc/squid/squid.conf
+ 
+ # การตั้งค่าพอร์ตปลาหมึก
+ sed -i "s | Squid_Port1 | $ Squid_Port1 | g" /etc/squid/squid.conf
+ sed -i "s | Squid_Port2 | $ Squid_Port2 | g" /etc/squid/squid.conf
+ sed -i "s | Squid_Port3 | $ Squid_Port3 | g" /etc/squid/squid.conf
+
+ # การเริ่มต้นพร็อกซีเซิร์ฟเวอร์
+ echo -e "กำลังรีสตาร์ทพร็อกซีเซิร์ฟเวอร์ ... "
+ systemctl รีสตาร์ทปลาหมึก
+}
+
+function OvpnConfigs () {
+ # การสร้าง nginx config สำหรับ ovpn config ของเราดาวน์โหลดเว็บเซิร์ฟเวอร์
+ แมว << 'myNginxC'> /etc/nginx/conf.d/PR-Aiman-ovpn-config.conf
+# ไดเรกทอรีดาวน์โหลดการกำหนดค่า OpenVPN ของฉัน
+เซิร์ฟเวอร์ {
+ ฟัง 0.0.0.0:myNginx;
+ server_name localhost;
+ ราก / var / www / openvpn;
+ ดัชนี index.html;
+}
+myNginxC
+
+ # การตั้งค่าพอร์ตกำหนดค่า nginx ของเราสำหรับไซต์ดาวน์โหลด. avpn
+ sed -i "s | myNginx | ​​$ OvpnDownload_Port | g" /etc/nginx/conf.d/PR-Aiman-ovpn-config.conf
+
+ # การลบหน้า nginx เริ่มต้น (พอร์ต 80)
+ rm -rf / etc / nginx / sites- *
+
+ # การสร้างไดเรกทอรีรากของเราสำหรับการกำหนดค่า. avpn ทั้งหมดของเรา
+ rm -rf / var / www / openvpn
+ mkdir -p / var / www / openvpn
+
+ # ตอนนี้กำลังสร้างการกำหนดค่า OpenVPN ทั้งหมดของเรา 
+
+แมว <<EOF16> /var/www/openvpn/javanet-tcp.ovpn
+ลูกค้า
+dev tun
+โปรโต tcp
+setenv FRIENDLY_NAME "jAvaNet"
+$ IPADDR ระยะไกล $ OpenVPN_TCP_Port
+เซิร์ฟเวอร์ remote-cert-tls
+เชื่อมต่อ - ลองใหม่ไม่มีที่สิ้นสุด
+resolv- ลองใหม่ไม่มีที่สิ้นสุด
+ขุนนาง
+ปุ่มคงอยู่
+ยังคงอยู่
+auth-user-pass
+ไม่รับรองความถูกต้อง
+auth-nocache
+ไม่มีการเข้ารหัส
+คอมพ์ -Lzo
+เปลี่ยนเส้นทางเกตเวย์ def1
+setenv CLIENT_CERT 0
+reneg-sec 0
+กริยา 1
+http-proxy $ IPADDR $ Squid_Port1
+http-proxy-option VERSION 1.1
+http-proxy-option AGENT Chrome / 80.0.3987.87
+http-proxy-option CUSTOM-HEADER Host <ใส่โฮส>
+http-proxy-option CUSTOM-HEADER X-Forward-Host <ใส่โฮส>
+http-proxy-option CUSTOM-HEADER X-Forwarded-For <ใส่โฮส>
+http-proxy-option CUSTOM-HEADER Referrer <ใส่โฮส>
+dhcp-option DNS 8.8.8.8
+dhcp-option DNS 8.8.4.4
+dhcp-option google.com
+
+<ca>
+$ (แมว /etc/openvpn/ca.crt)
+</ca>
+EOF16
+
+แมว <<EOF162> /var/www/openvpn/javanet-udp.ovpn
+ลูกค้า
+dev tun
+โปรโต udp
+setenv FRIENDLY_NAME "jAvaNet"
+$ IPADDR ระยะไกล $ OpenVPN_UDP_Port
+เซิร์ฟเวอร์ remote-cert-tls
+resolv- ลองใหม่ไม่มีที่สิ้นสุด
+ลอย
+รวดเร็ว io
+ขุนนาง
+ปุ่มคงอยู่
+ยังคงอยู่ระยะไกล ip
+ยังคงอยู่
+auth-user-pass
+ไม่รับรองความถูกต้อง
+auth-nocache
+ไม่มีการเข้ารหัส
+คอมพ์ -Lzo
+เปลี่ยนเส้นทางเกตเวย์ def1
+setenv CLIENT_CERT 0
+reneg-sec 0
+กริยา 1
+<ca>
+$ (แมว /etc/openvpn/ca.crt)
+</ca>
+EOF162
+
+ # การสร้างไซต์ดาวน์โหลด OVPN index.html
+แมว << 'mySiteOvpn'> /var/www/openvpn/index.html
+<! DOCTYPE html>
+<html lang = "th">
+
+<! - ไซต์ดาวน์โหลด OVPN อย่างง่ายโดย PR-Aiman ​​->
+
+<head> <meta charset = "utf-8" /> <title> ดาวน์โหลดการกำหนดค่า PR-Aiman ​​OVPN </title> <meta name = "description" content = "MyScriptName Server" /> <meta content = "width = device -width, initial-scale = 1.0, maximum-scale = 1.0, user-scalable = no "name =" viewport "/> <meta name =" theme-color "content =" # 000000 "/> <link rel =" styleheet "href =" https://use.fontawesome.com/releases/v5.8.2/css/all.css "> <link href =" https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap /4.3.1/css/bootstrap.min.css "rel =" stylesheet "> <link href =" https://cdnjs.cloudflare.com/ajax/libs/mdbootstrap/4.8.3/css/mdb.min css "rel =" สไตล์ชีท "> </head> <body> <div class ="คอนเทนเนอร์ justify-content-center "style =" margin-top: 9em; margin-bottom: 5em; "> <div class =" col-md "> <div class =" view "> <img src =" https: / /openvpn.net/wp-content/uploads/openvpn.jpg "class =" card-img-top "> <div class =" mask rgba-white-little "> </div> </div> <div class = "card"> <div class = "card-body"> <h5 class = "card-title"> รายการกำหนดค่า </h5> <br /> <ul class = "list-group"> <li class = "list -group-item justify-content-between align-items-center "style =" margin-bottom: 1em; "> <p> ปฏิวัติกลายเป็นจริง <span class =" badge light-blue darken-4 "> Android / iOS / พีซี / โมเด็ม </span> <br /> <small> กำหนดค่าโปรโตคอล OVPN UDP </small> </p> <a class = "btn btn-outline-success waves-effect btn-sm" href = "http: // IP-ADDRESS: NGINXPORT / praiman-udp.ovpn" style = "float: right;"> <i class = " fa fa-download "> </i> Muat Turun </a> </li> <li class =" list-group-item justify-content-between align-items-center "style =" margin-bottom: 1em; "> <p> ปฏิวัติกลายเป็นจริง <span class =" badge light-blue darken-4 "> Android / iOS / PC / Modem </span> <br /> <small> กำหนดค่า OVPN Protocol TCP + PROXY </small> </p> <a class="btn btn-outline-success waves-effect btn-sm" href="http://IP-ADDRESS:NGINXPORT/praiman-tcp.ovpn" style="float:right;"> <i class = "fa fa-download"> </i> Muat Turun </a> </li></ul><ul> <li> </div> </ div> </div> </body> </html>
+mySiteOvpn
+ 
+ # การตั้งชื่อแม่แบบที่ถูกต้องที่อยู่ IP และพอร์ต nginx
+ sed -i "s | NGINXPORT | $ OvpnDownload_Port | g" /var/www/openvpn/index.html
+ sed -i "s | ที่อยู่ IP | $ IPADDR | g" /var/www/openvpn/index.html
+
+ # กำลังเริ่มบริการ nginx ใหม่
+ systemctl รีสตาร์ท nginx
+ 
+ # การสร้างไฟล์เก็บถาวร config .ovpn ทั้งหมด
+ cd / var / www / openvpn
+ zip -qq -r configs.zip * .ovpn
+ ซีดี
+}
+
+ฟังก์ชัน ip_address () {
+  IP ในเครื่อง = "$ (ip addr | egrep -o '[0-9] {1,3} \. [0-9] {1,3} \. [0-9] {1,3} \. [ 0-9] {1,3} '| egrep -v "^ 192 \ .168 | ^ 172 \ .1 [6-9] \. | ^ 172 \ .2 [0-9] \. | ^ 172 \ .3 [0-2] \. | ^ 10 \. | ^ 127 \. | ^ 255 \. | ^ 0 \. "| หัว -n 1)"
+  [-z "$ {IP}"] && IP = "$ (wget -qO- -t1 -T2 ipv4.icanhazip.com)"
+  [-z "$ {IP}"] && IP = "$ (wget -qO- -t1 -T2 ipinfo.io/ip)"
+  [! -z "$ {IP}"] && echo "$ {IP}" || ก้อง
+} 
+IPADDR = "$ (ip_address)"
+
+function ConfStartup () {
+ # เวลารีบูตเครื่องทุกวัน
+ # สำหรับคำสั่ง cron โปรดไปที่ https://crontab.guru
+ เสียงสะท้อน -e "0 4 \ t * * * \ troot \ treboot"> /etc/cron.d/b_reboot_job
+
+ # การสร้างไดเร็กทอรีสำหรับสคริปต์เริ่มต้น
+ rm -rf / etc / PR- ไอแมน
+ mkdir -p / etc / PR- ไอแมน
+ chmod -R 755 / etc / PR-Aiman
+ 
+ # การสร้างสคริปต์เริ่มต้นโดยใช้เทคนิค cat eof
+ cat << 'EOFSH'> /etc/PR-Aiman/startup.sh
+#! / bin / ทุบตี
+# การตั้งค่าเวลาท้องถิ่นของเซิร์ฟเวอร์
+ln -fs / usr / share / zoneinfo / MyVPS_Time / etc / localtime
+
+# ป้องกัน UI เหมือน DOS เมื่อติดตั้งโดยใช้ APT (ปิดใช้งานกล่องโต้ตอบโต้ตอบ APT)
+ส่งออก DEBIAN_FRONTEND = ไม่โต้ตอบ
+
+# อนุญาตพอร์ต TCP ทั้งหมดสำหรับเครื่องของเรา (วิธีแก้ปัญหาง่ายๆสำหรับ VPS ตามนโยบาย)
+iptables -A อินพุต -s $ (wget -4qO- http://ipinfo.io/ip) -p tcp -m มัลติพอร์ต --dport 1: 65535 -j ยอมรับ
+
+# อนุญาตให้ OpenVPN ส่งต่อการรับส่งข้อมูล
+/ bin / bash /etc/openvpn/openvpn.bash
+
+# การลบบัญชี SSH ที่หมดอายุ
+/ usr / local / sbin / delete_expired &> / dev / null
+ออก 0
+EOFSH
+ chmod + x /etc/PR-Aiman/startup.sh
+ 
+ # การตั้งค่าเวลาท้องถิ่นของเซิร์ฟเวอร์ทุกครั้งที่เครื่องนี้รีบูต
+ sed -i "s | MyVPS_Time | $ MyVPS_Time | g" /etc/PR-Aiman/startup.sh
+
+ # 
+ rm -rf /etc/sysctl.d/99*
+
+ # การตั้งค่าสคริปต์เริ่มต้นของเราเพื่อเรียกใช้การบู๊ตทุกเครื่อง 
+ cat << 'FordServ'> /etc/systemd/system/PR-Aiman.service
+[หน่วย]
+คำอธิบาย = PR-Aiman ​​Startup Script
+ก่อนหน้า = network-online.target
+ต้องการ = network-online.target
+
+[บริการ]
+พิมพ์ = oneshot
+ExecStart = / bin / bash /etc/PR-Aiman/startup.sh
+RemainAfterExit = ใช่
+
+[ติดตั้ง]
+WantedBy = multi-user.target
+FordServ
+ chmod + x /etc/systemd/system/PR-Aiman.service
+ systemctl daemon-reload
+ systemctl เริ่ม PR-Aiman
+ systemctl เปิดใช้งาน PR-Aiman ​​&> / dev / null
+ systemctl เปิดใช้งาน fail2ban &> / dev / null
+ systemctl เริ่มต้น fail2ban &> / dev / null
+
+ # รีบูตบริการ cron
+ systemctl รีสตาร์ท cron
+ systemctl เปิดใช้งาน cron
+ 
+}
+ # สร้างแอดมิน
+ useradd -m javanet
+ เสียงสะท้อน "javanet: 123" | chpasswd
+
+ฟังก์ชัน ConfMenu () {
+echo -e "การสร้างสคริปต์เมนู .. "
+
+ซีดี / usr / local / sbin /
+rm -rf {accounts, base-ports, base-ports-wc, base-script, bench-network, clearcache, การเชื่อมต่อ, create, create_random, create_trial, delete_expired, วินิจฉัย, edit_dropbear, edit_openssh, edit_openvpn, edit_ports, edit_squid3, edit_stunnel4, lock_list, เมนู, ตัวเลือก, ram, reboot_sys, reboot_sys_auto, restart_services, เซิร์ฟเวอร์, set_multilogin_autokill, set_multilogin_autokill_lib, show_ports, speedtest, user_delete, user_details, user_details_lib, user_extend, user_list, user_lib, show_ports, speedtest, user_delete, user_details, user_details_lib, user_extend, user_list, user_lib
+wget -q 'https://github.com/javakeisha/debian9sc/raw/main/files/menu/menu.zip'
+เปิดเครื่องรูด -qq menu.zip
+rm -f menu.zip
+chmod + x ./*
+dos2unix ./* &> / dev / null
+sed -i | /etc/squid/squid.conf | g './*
+sed -i | http_port | g './*
+ซีดี ~
+}
+
+ฟังก์ชัน ScriptMessage () {
+ เสียงสะท้อน -e "[\ e [1; 32m $ MyScriptName VPS Installer \ e [0m]"
+ ก้อง -e ""
+ echo -e "แอดไลน์: athena"
+ ก้อง -e ""
+}
+
+ฟังก์ชัน InstBadVPN () {
+ # ดึง BadVPN ไบนารี 64 บิตหรือ 32 บิต
+ถ้า ["$ (getconf LONG_BIT)" == "64"]; แล้ว
+ wget -O / usr / bin / badvpn-udpgw "https://github.com/javakeisha/debian9sc/raw/main/files/plugins/badvpn-udpgw64"
+อื่น
+ wget -O / usr / bin / badvpn-udpgw "https://github.com/javakeisha/debian9sc/raw/main/files/plugins/badvpn-udpgw"
+fi
+ # ตั้งค่า BadVPN ให้เริ่มในการบู๊ตผ่าน. profile
+ sed -i '$ i \ screen -AmdS badvpn badvpn-udpgw --listen-addr 127.0.0.1:7300' /root/.profile
+ # เปลี่ยนการอนุญาตเพื่อให้ดำเนินการได้
+ chmod + x / usr / bin / badvpn-udpgw
+ # เริ่ม BadVPN ผ่านหน้าจอ
+ หน้าจอ -AmdS badvpn badvpn-udpgw --listen-addr 127.0.0.1:7300
+}
+
+
+############################################
+############################################
+########## กระบวนการติดตั้ง ###############
+############################################
+## คำเตือน: ห้ามแก้ไขหรือแก้ไขสิ่งใด ๆ
+## หากคุณไม่รู้ว่าจะทำอย่างไร
+## ส่วนนี้ไวเกินไป
+############################################
+############################################
+
+ # สิ่งแรกที่ต้องทำคือตรวจสอบว่าเครื่องนี้เป็น Debian หรือไม่
+ แหล่งที่มา / etc / os-release
+ถ้า [["$ ID"! = 'debian']]; แล้ว
+ ScriptMessage
+ echo -e "[\ e [1; 31mError \ e [0m] สคริปต์นี้มีไว้สำหรับ Debian เท่านั้นกำลังออก ... " 
+ ทางออก 1
+fi
+
+ # ตรวจสอบว่าเครื่องของเราอยู่ในผู้ใช้รูทหรือไม่ถ้าไม่ใช่สคริปต์นี้จะออก
+ # หากคุณเป็นผู้ใช้ sudo ให้เรียกใช้ "sudo su-" ก่อนเรียกใช้สคริปต์นี้
+ ถ้า [[$ EUID -ne 0]] แล้ว
+ ScriptMessage
+ echo -e "[\ e [1; 31mError \ e [0m] สคริปต์นี้ต้องรันในฐานะรูทออกจาก ... "
+ ทางออก 1
+fi
+
+ # (สำหรับ OpenVPN) ตรวจสอบว่าเครื่องนี้มีโมดูล TUN นี่คืออินเทอร์เฟซ Tunneling ของเซิร์ฟเวอร์ OpenVPN
+ ถ้า [[! -e / dev / net / tun]]; แล้ว
+ echo -e "[\ e [1; 31mError \ e [0m] คุณไม่สามารถใช้สคริปต์นี้โดยไม่ได้ติดตั้ง / ฝังโมดูล TUN ไว้ในเครื่องของคุณโปรดยื่นตั๋วสนับสนุนให้กับผู้ดูแลระบบเครื่องของคุณเกี่ยวกับเรื่องนี้"
+ echo -e "[\ e [1; 31m- \ e [0m] ขณะนี้สคริปต์กำลังออก ... "
+ ทางออก 1
+fi
+
+ # เริ่มการติดตั้งโดยการอัปเดตและอัปเกรดเครื่องจากนั้นติดตั้งแพ็คเกจ / บริการที่เราต้องการทั้งหมดเพื่อติดตั้ง
+ ScriptMessage
+ นอนหลับ 2
+ InstUpdates
+ 
+ # กำหนดค่า OpenSSH และ Dropbear
+ echo -e "กำลังกำหนดค่า ssh ... "
+ InstSSH
+ 
+ # กำหนดค่า Stunnel
+ echo -e "กำลังกำหนดค่า Stunnel ... "
+ InsStunnel
+ 
+ # กำหนดค่า BadVPN UDPGW
+ echo -e "การกำหนดค่า BadVPN UDPGW ... "
+ InstBadVPN
+ 
+ # กำหนดค่า Webmin
+ echo -e "กำลังกำหนดค่า webmin ... "
+ InstWebmin
+ 
+ # กำหนดค่าปลาหมึก
+ echo -e "กำลังกำหนดค่าพร็อกซี ... "
+ InsProxy
+ 
+ # กำหนดค่า OpenVPN
+ echo -e "การกำหนดค่า OpenVPN ... "
+ InsOpenVPN
+ 
+ # การกำหนดค่าไซต์ดาวน์โหลดกำหนดค่า Nginx OVPN
+ OvpnConfigs
+
+ # ความช่วยเหลือและสคริปต์เริ่มต้นบางอย่าง
+ ConfStartup
+
+ ## ปลั๊กอินตัวสร้าง DNS สำหรับการปฏิวัติเป็นผู้ใช้ที่แท้จริง (สำหรับการใช้สคริปต์ vps เท่านั้น)
+ wget -qO dnsmaker "https://raw.githubusercontent.com/Bonveio/BonvScripts/master/DNSMaster/debian"
+ chmod + x dnsmaker
+ ./dnsmaker
+ rm -rf dnsmaker
+ sed -i "s | http-proxy $ IPADDR | http-proxy $ (cat / tmp / abonv_mydns) | g" /var/www/openvpn/praiman-tcp.ovpn
+ sed -i "s | remote $ IPADDR | remote $ (cat / tmp / abonv_mydns) | g" /var/www/openvpn/praiman-udp.ovpn
+ ขด -4sSL "$ (cat / tmp / abonv_mydns_domain)" &> / dev / null
+ mv / tmp / abonv_mydns / etc / bonveio / my_domain_name
+ mv / tmp / abonv_mydns_id / etc / bonveio / my_domain_id
+ rm -rf / tmp / abonv *
+
+ # สคริปต์เมนู VPS v1.0
+ ConfMenu
+ 
+ # การตั้งค่าเวลาท้องถิ่นของเซิร์ฟเวอร์
+ ln -fs / usr / share / zoneinfo / $ MyVPS_Time / etc / localtime
+ 
+ ชัดเจน
+ ซีดี ~
+ 
+  # เรียกใช้ screenfetch
+ wget -O / usr / bin / screenfetch "https://github.com/javakeisha/debian9sc/raw/main/files/plugins/screenfetch3"
+ chmod + x / usr / bin / screenfetch
+ echo "/ bin / bash /etc/openvpn/openvpn.bash" >> .profile
+ echo "ชัดเจน" >> .profile
+ echo "screenfetch" >> .profile
+
+ 
+ # แสดงข้อความแบนเนอร์ของสคริปต์
+ ScriptMessage
+ 
+ # แสดงข้อมูลเพิ่มเติมจากการติดตั้งสคริปต์นี้
+เสียงสะท้อน ""
+echo "ติดตั้งเสร็จแล้ว !!"
+ก้อง "------------------------------------------------ -------------------------------- "
+echo "Debian Premium Script"
+เสียงสะท้อน "-athena-"
+ก้อง "------------------------------------------------ -------------------------------- "
+ก้อง "" | ที -a log-install.txt
+echo "ข้อมูลเซิร์ฟเวอร์" | ที -a log-install.txt
+echo "- เขตเวลา: เอเชีย / กรุงเทพฯ (GMT +7)" | ที -a log-install.txt
+echo "- Fail2Ban: [ON]" | ที -a log-install.txt
+echo "- IPtables: [ON]" | ที -a log-install.txt
+echo "- รีบูตอัตโนมัติ: [ON]" | ที -a log-install.txt
+เสียงสะท้อน "- IPv6: [ปิด]" | ที -a log-install.txt
+ก้อง "" | ที -a log-install.txt
+echo "ข้อมูลแอปพลิเคชันและพอร์ต" | ที -a log-install.txt
+echo "- OpenVPN: TCP $ OpenVPN_TCP_Port UDP $ OpenVPN_UDP_Port" | ที -a log-install.txt
+echo "- OpenSSH: $ SSH_Port1, $ SSH_Port2" | ที -a log-install.txt
+echo "- Dropbear: $ Dropbear_Port1, $ Dropbear_Port2" | ที -a log-install.txt
+echo "- Stunnel / SSL: $ Stunnel_Port1, $ Stunnel_Port2" | ที -a log-install.txt
+echo "- Squid Proxy: $ Squid_Port1, $ Squid_Port2 (จำกัด เฉพาะ IP Server)" | ที -a log-install.txt
+echo "- Squid ELITE: $ Squid_Port3 (จำกัด เฉพาะ IP Server)" | ที -a log-install.txt
+echo "- Privoxy: $ Privoxy_Port1, $ Privoxy_Port2 (จำกัด เฉพาะ IP Server)" | ที -a log-install.txt
+ก้อง "" | ที -a log-install.txt
+ก้อง "" | ที -a log-install.txt
+echo "ข้อมูลสคริปต์พรีเมียม" | ที -a log-install.txt
+echo "เพื่อแสดงรายการคำสั่ง: menu" | ที -a log-install.txt
+ก้อง "" | ที -a log-install.txt
+ก้อง "" | ที -a log-install.txt
+echo "ข้อมูลสำคัญ" | ที -a log-install.txt
+echo "- บันทึกการติดตั้ง: cat /root/log-install.txt" | ที -a log-install.txt
+ก้อง "" | ที -a log-install.txt
+echo "- Webmin: http: // $ IPADDR: 10000 /" | ที -a log-install.txt
+ก้อง "" | ที -a log-install.txt
+ก้อง "" | ที -a log-install.txt
+echo "ดาวน์โหลดการกำหนดค่า OpenVPN" | ที -a log-install.txt
+echo "- ลิงค์ดาวน์โหลด: http: // $ IPADDR: 85 / configs.zip" | ที -a log-install.txt
+เสียงสะท้อน "© jAvaNet" | ที -a log-install.txt
+echo "ติดต่อ athena แอดไลน์: athena "
+ก้อง "" | ที -a log-install.txt
+echo "ขอขอบคุณ PR Aiman ​​โปรเจค https://github.com/praiman99/AutoScriptDebian9" | ที -a log-install.txt
+echo "โปรดรีบูตเครื่องของท่านพิมพ์คำว่า reboot" | ที -a log-install.txt
+
+ # การล้างบันทึกทั้งหมดจากการติดตั้ง
+ rm -rf /root/.bash_history && ประวัติศาสตร์ -c && echo ''> / var / log / syslog
+
+rm -f DB *
+ทางออก 1
